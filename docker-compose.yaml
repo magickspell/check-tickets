@@ -1,0 +1,34 @@
+services:
+
+  tickets-postgres:
+    image: postgres:17.2-alpine3.21
+    ports:
+      - 6432:5432
+    environment:
+      environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_HOST_AUTH_METHOD: "trust"
+
+  tickets-adminer:
+    image: adminer:4.8.1
+    ports:
+      - 8081:8080
+    depends_on:
+      - tickets-postgres
+
+  tickets-backend:
+    working_dir: /go-app-dir
+    environment:
+      - GO_HOST=${GO_HOST}
+      - GO_DB_URL=${GO_DB_URL}
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    volumes:
+      - ./backend:/go-app-dir
+    ports:
+      - "8080:8080"
+    depends_on:
+      - tickets-postgres
