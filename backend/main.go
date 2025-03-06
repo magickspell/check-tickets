@@ -38,9 +38,9 @@ func main() {
 	fmt.Println("Type of config:", reflect.TypeOf(config))
 
 	dbConn := db.Conn(config)
-	defer dbConn.Close()
+	// defer dbConn.Close()
 
-	if err := db.RunMigrations(dbConn); err != nil {
+	if err := db.RunMigrations(logger, dbConn); err != nil {
 		logger.OuteputLog(logg.LogPayload{Error: fmt.Errorf("migration failed: %v", err)})
 	}
 	// else {
@@ -75,6 +75,7 @@ func main() {
 	router.GET("/user-balance", func(gc *gin.Context) { userFeature.HandleUserBalance(logger, config, gc) })
 	router.GET("/transactions", func(gc *gin.Context) { transactionFeature.HandleUserTransactions(logger, config, gc) })
 	router.POST("/transactions", func(gc *gin.Context) { transactionFeature.HandleCreateTransaction(logger, config, gc) })
+	router.POST("/rzd-stations", func(gc *gin.Context) { transactionFeature.HandleCreateTransaction(logger, config, gc) })
 	// router.Run(config.Host)
 	server := &http.Server{
 		Addr:    config.Host,

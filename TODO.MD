@@ -14,7 +14,7 @@ https://suggest.travelpayouts.com/search?service=tutu_trains&term=2000000&term2=
 2) распарсит и перевести строки в БД
 3) на фронте сделать селект ОТКУДА и селект КУДА по распаршенным станциям
 4) дернуть АПИ
-5) ...
+5) дернуть сайт ТУТУ и спрсить данные (они прелетают в php в carListData ... availableSeats)
 
 
 

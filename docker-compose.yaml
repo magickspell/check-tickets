@@ -32,3 +32,27 @@ services:
       - "8080:8080"
     depends_on:
       - tickets-postgres
+
+# prod
+  # vue-frontend:
+  #   build:
+  #     context: ./rzd-frontend
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "8082:80"
+  #   depends_on:
+  #     - tickets-backend
+
+# dev
+  vue-frontend:
+    image: node:22.14-alpine3.21 # Используем официальный образ Node.js
+    working_dir: /app # Рабочая директория в контейнере
+    volumes:
+      - ./rzd-frontend:/app # Монтируем папку с проектом
+    ports:
+      - "5173:5173" # Пробрасываем порт для разработки (обычно 8080 для yarn dev)
+    # environment:
+    #   - CHOKIDAR_USEPOLLING=true # Для отслеживания изменений в файлах
+    command: sh -c "yarn install && yarn dev" # Устанавливаем зависимости и запускаем dev-сервер
+    depends_on:
+      - tickets-backend

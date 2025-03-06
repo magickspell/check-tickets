@@ -1,3 +1,4 @@
 .env
 backend/tmp
 backend/log
+rzd-frontend/node_modules
