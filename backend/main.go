@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	_ "github.com/jackc/pgx/v5/stdlib"
 
+	rzdFeatures "backend/app/feature/rzd"
 	transactionFeature "backend/app/feature/transaction"
 	userFeature "backend/app/feature/user"
 	testfuncs "backend/app/test-funcs"
@@ -23,6 +24,7 @@ import (
 	logg "backend/logger"
 )
 
+// todo GORM для конекшена БД
 // todo add logger
 // todo add прерывания операций по timeout и cancel
 // todo подрубить контекст
@@ -62,7 +64,7 @@ func main() {
 	router := gin.Default()
 	router.Use(cntx.ContextMiddleware(config, logger))
 	router.Use(func(c *gin.Context) {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Second)
 		defer cancel()
 
 		c.Request = c.Request.WithContext(ctx)
@@ -75,7 +77,9 @@ func main() {
 	router.GET("/user-balance", func(gc *gin.Context) { userFeature.HandleUserBalance(logger, config, gc) })
 	router.GET("/transactions", func(gc *gin.Context) { transactionFeature.HandleUserTransactions(logger, config, gc) })
 	router.POST("/transactions", func(gc *gin.Context) { transactionFeature.HandleCreateTransaction(logger, config, gc) })
-	router.POST("/rzd-stations", func(gc *gin.Context) { transactionFeature.HandleCreateTransaction(logger, config, gc) })
+	router.POST("/rzd-stations", func(gc *gin.Context) { rzdFeatures.UploadStations(logger, config, gc) })
+	// валидация, параметры (от до станции по коду)
+	router.GET("/rzd-stations", func(gc *gin.Context) { rzdFeatures.GetStations(logger, config, gc) })
 	// router.Run(config.Host)
 	server := &http.Server{
 		Addr:    config.Host,

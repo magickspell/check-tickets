@@ -29,7 +29,7 @@ func ContextMiddleware(config *cfg.Config, logger *logg.Logger) gin.HandlerFunc 
 			Context:     gc, // передаем в конект контекс гина
 			Config:      config,
 			Logger:      logger,
-			Timeout:     3000, // 3 секунды
+			Timeout:     300000, // 3 секунды
 			IsCancelled: false,
 		}
 
