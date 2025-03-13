@@ -113,7 +113,7 @@ func main() {
 	log.Println("timeout of 5 seconds.")
 	log.Println("Server exiting")
 
-	// пример проверки завершения запроса
+	//  пример проверки завершения запроса
 	/*
 		r := gin.Default()
 		// Middleware с таймаутом
