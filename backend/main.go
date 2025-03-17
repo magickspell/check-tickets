@@ -13,6 +13,14 @@ import (
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/sdk/resource"
+	"go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 
 	rzdFeatures "backend/app/feature/rzd"
 	transactionFeature "backend/app/feature/transaction"
@@ -24,6 +32,15 @@ import (
 	logg "backend/logger"
 )
 
+// RabbitMQ, Kafka, NATS
+// redis
+// grpc protobuff
+// clickhouse
+// JAEGER
+// sentry
+// grafana
+// elk search
+// tgbot
 // todo GORM для конекшена БД
 // todo add logger
 // todo add прерывания операций по timeout и cancel
@@ -33,6 +50,46 @@ import (
 // todo add auth
 // подрубить ормку GORM
 // todo сделать нормальные тесты
+
+func startTracing() (*trace.TracerProvider, error) {
+	serviceName := "product-app"
+	headers := map[string]string{
+		"content-type": "application/json",
+	}
+
+	exporter, err := otlptrace.New(
+		context.Background(),
+		otlptracehttp.NewClient(
+			otlptracehttp.WithEndpoint("t-jaeger:4318"),
+			otlptracehttp.WithHeaders(headers),
+			otlptracehttp.WithInsecure(),
+		),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("creating new exporter: %w", err)
+	}
+
+	tracerprovider := trace.NewTracerProvider(
+		trace.WithBatcher(
+			exporter,
+			trace.WithMaxExportBatchSize(trace.DefaultMaxExportBatchSize),
+			trace.WithBatchTimeout(trace.DefaultScheduleDelay*time.Millisecond),
+			trace.WithMaxExportBatchSize(trace.DefaultMaxExportBatchSize),
+		),
+		trace.WithResource(
+			resource.NewWithAttributes(
+				semconv.SchemaURL,
+				semconv.ServiceNameKey.String(serviceName),
+				attribute.String("environment", "testing"),
+			),
+		),
+	)
+
+	otel.SetTracerProvider(tracerprovider)
+
+	return tracerprovider, nil
+}
+
 func main() {
 	logger := logg.NewLogger()
 	config := cfg.GetConfig(logger)
@@ -59,7 +116,19 @@ func main() {
 	// 	logger.OuteputLog(logg.LogPayload{Error: fmt.Errorf("log file created failed: %v", err)})
 	// }
 	// gin.DefaultWriter = io.MultiWriter(logFile)
+	traceProvider, err := startTracing()
+	if err != nil {
+		log.Fatalf("traceprovider: %v", err)
+	}
+	defer func() {
+		if err := traceProvider.Shutdown(context.Background()); err != nil {
+			log.Fatalf("traceprovider: %v", err)
+		}
+	}()
 
+	tracerJaeger := traceProvider.Tracer("my-app")
+	fmt.Println("[tracerJaeger]")
+	fmt.Println(tracerJaeger)
 	// run gin app
 	router := gin.Default()
 	router.Use(cntx.ContextMiddleware(config, logger))
@@ -71,7 +140,24 @@ func main() {
 		c.Next()
 	})
 	router.Use(gin.Recovery()) // panic recover middleware
-	router.GET("/hi", func(gc *gin.Context) { gc.String(http.StatusOK, "Holla! Welcome Gin Serer!\n") })
+	router.GET("/hi", func(gc *gin.Context) {
+		var tracer = otel.Tracer("github.com/Salaton/tracing/pkg/usecases/product")
+		fmt.Println("[tracer]")
+		fmt.Println(tracer)
+		_, span := tracer.Start(gc, "CreateProduct")
+		defer span.End()
+		span.SpanContext()
+		span.AddEvent("event")
+		span.SetAttributes(attribute.KeyValue{Key: "key"})
+		span.SetStatus(codes.Ok, "ok status")
+		span.SetName("name setName")
+
+		fmt.Println("[span]")
+		fmt.Println(span)
+		span.AddEvent("after fmt")
+		gc.String(http.StatusOK, "Holla! Welcome Gin Serer!\n")
+		span.AddEvent("answer")
+	})
 	router.GET("/panic", func(gc *gin.Context) { panic("panic") })
 	router.GET("/long", func(gc *gin.Context) { testfuncs.LongOperation(gc) })
 	router.GET("/user-balance", func(gc *gin.Context) { userFeature.HandleUserBalance(logger, config, gc) })

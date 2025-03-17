@@ -1,6 +1,7 @@
 services:
 
-  tickets-postgres:
+  t-postgres:
+    container_name: t-postgres
     image: postgres:17.2-alpine3.21
     ports:
       - 6432:5432
@@ -11,27 +12,46 @@ services:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_HOST_AUTH_METHOD: "trust"
 
-  tickets-adminer:
+  t-adminer:
+    container_name: t-adminer
     image: adminer:4.8.1
     ports:
-      - 8081:8080
+      - 8282:8080
     depends_on:
-      - tickets-postgres
+      - t-postgres
 
-  tickets-backend:
+  t-jaeger:
+    image: jaegertracing/all-in-one:1.67.0
+    container_name: t-jaeger
+    ports:
+      - "8686:16686"    # HTTP for the Jaeger UI
+      - "6831:6831/udp"  # UDP for the collector
+      - "14268:14268"    # HTTP for the collector
+      - "4318:4318"    # go logger
+    environment:
+      COLLECTOR_ZIPKIN_HTTP_PORT: 9411
+
+  t-backend:
+    container_name: t-backend
     working_dir: /go-app-dir
     environment:
       - GO_HOST=${GO_HOST}
       - GO_DB_URL=${GO_DB_URL}
+      - JAEGER_AGENT_HOST=${JAEGER_AGENT_HOST}
+      - JAEGER_AGENT_PORT=${JAEGER_AGENT_PORT}
+      - JAEGER_ENDPOINT=${JAEGER_ENDPOINT}
+      - JAEGER_SERVICE_NAME=${JAEGER_SERVICE_NAME}
+      - JAEGER_SAMPLING_PERCENTAGE=${JAEGER_SAMPLING_PERCENTAGE}
     build:
       context: ./backend
       dockerfile: Dockerfile
     volumes:
       - ./backend:/go-app-dir
     ports:
-      - "8080:8080"
+      - "8181:8080"
     depends_on:
-      - tickets-postgres
+      - t-postgres
+      - t-jaeger
 
 # prod
   # vue-frontend:
@@ -46,6 +66,7 @@ services:
 # dev
   vue-frontend:
     image: node:22.14-alpine3.21 # Используем официальный образ Node.js
+    container_name: vue-t
     working_dir: /app # Рабочая директория в контейнере
     volumes:
       - ./rzd-frontend:/app # Монтируем папку с проектом
@@ -55,4 +76,17 @@ services:
     #   - CHOKIDAR_USEPOLLING=true # Для отслеживания изменений в файлах
     command: sh -c "yarn install && yarn dev" # Устанавливаем зависимости и запускаем dev-сервер
     depends_on:
-      - tickets-backend
+      - t-backend
+
+  t-grafana:
+    image: grafana/grafana-oss:11.3.4-ubuntu
+    container_name: t-grafana
+    # restart: unless-stopped
+    user: '0'
+    ports:
+      - '3003:3000'
+    # adding the mount volume point which we create earlier
+    volumes:
+      - '$PWD/tmp_grafana:/var/lib/grafana'
+    depends_on:
+      - vue-frontend
