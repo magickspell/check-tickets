@@ -21,9 +21,11 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
+	"golang.org/x/exp/rand"
 
 	rzdFeatures "backend/app/feature/rzd"
 	transactionFeature "backend/app/feature/transaction"
+	trashFeatures "backend/app/feature/trash"
 	userFeature "backend/app/feature/user"
 	testfuncs "backend/app/test-funcs"
 	cfg "backend/config"
@@ -32,6 +34,7 @@ import (
 	logg "backend/logger"
 )
 
+// DB pool
 // RabbitMQ, Kafka, NATS
 // redis
 // grpc protobuff
@@ -51,7 +54,7 @@ import (
 // подрубить ормку GORM
 // todo сделать нормальные тесты
 
-func startTracing() (*trace.TracerProvider, error) {
+func startTracing(cfg *cfg.Config) (*trace.TracerProvider, error) {
 	serviceName := "product-app"
 	headers := map[string]string{
 		"content-type": "application/json",
@@ -60,7 +63,7 @@ func startTracing() (*trace.TracerProvider, error) {
 	exporter, err := otlptrace.New(
 		context.Background(),
 		otlptracehttp.NewClient(
-			otlptracehttp.WithEndpoint("t-jaeger:4318"),
+			otlptracehttp.WithEndpoint(cfg.JaegerUrl),
 			otlptracehttp.WithHeaders(headers),
 			otlptracehttp.WithInsecure(),
 		),
@@ -116,7 +119,7 @@ func main() {
 	// 	logger.OuteputLog(logg.LogPayload{Error: fmt.Errorf("log file created failed: %v", err)})
 	// }
 	// gin.DefaultWriter = io.MultiWriter(logFile)
-	traceProvider, err := startTracing()
+	traceProvider, err := startTracing(config)
 	if err != nil {
 		log.Fatalf("traceprovider: %v", err)
 	}
@@ -125,10 +128,8 @@ func main() {
 			log.Fatalf("traceprovider: %v", err)
 		}
 	}()
+	traceProvider.Tracer("my-app")
 
-	tracerJaeger := traceProvider.Tracer("my-app")
-	fmt.Println("[tracerJaeger]")
-	fmt.Println(tracerJaeger)
 	// run gin app
 	router := gin.Default()
 	router.Use(cntx.ContextMiddleware(config, logger))
@@ -164,6 +165,7 @@ func main() {
 	router.GET("/transactions", func(gc *gin.Context) { transactionFeature.HandleUserTransactions(logger, config, gc) })
 	router.POST("/transactions", func(gc *gin.Context) { transactionFeature.HandleCreateTransaction(logger, config, gc) })
 	router.POST("/rzd-stations", func(gc *gin.Context) { rzdFeatures.UploadStations(logger, config, gc) })
+	router.POST("/trash", func(gc *gin.Context) { trashFeatures.CreateTrash(gc, config) })
 	// валидация, параметры (от до станции по коду)
 	router.GET("/rzd-stations", func(gc *gin.Context) { rzdFeatures.GetStations(logger, config, gc) })
 	// router.Run(config.Host)
@@ -178,6 +180,19 @@ func main() {
 		logger.OuteputLog(logg.LogPayload{Info: "Starting server..."})
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.OuteputLog(logg.LogPayload{Error: fmt.Errorf("error listening: %s", err)})
+		}
+	}()
+
+	go func() {
+		for {
+			trash := trashFeatures.Trash{
+				TrashID:   trashFeatures.GenerateUUID(),
+				TrashName: fmt.Sprintf("Trash %d", rand.Intn(1000)),           // Генерируем случайное имя
+				TrashCode: fmt.Sprintf("CODE-%d", rand.Intn(1000)),            // Генерируем случайный код
+				TrashJSON: fmt.Sprintf(`{"key": "value%d"}`, rand.Intn(1000)), // Генерируем случайный JSON
+			}
+			trashFeatures.SendTrash(trash)
+			time.Sleep(3 * time.Second) // Ждем 1 секунду перед следующей записью
 		}
 	}()
 	// Wait for interrupt signal to gracefully shutdown the server with a timeout of 5 seconds.
@@ -198,31 +213,4 @@ func main() {
 	<-timeoutCtx.Done()
 	log.Println("timeout of 5 seconds.")
 	log.Println("Server exiting")
-
-	//  пример проверки завершения запроса
-	/*
-		r := gin.Default()
-		// Middleware с таймаутом
-		r.Use(func(c *gin.Context) {
-			// Создаем контекст с таймаутом
-			ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
-			defer cancel()
-			// Заменяем контекст запроса на новый с таймаутом
-			c.Request = c.Request.WithContext(ctx)
-			// Передаем управление следующему middleware или обработчику
-			c.Next()
-		})
-		// Обработчик, который может выполняться долго
-		r.GET("/long-operation", func(c *gin.Context) {
-			// Симуляция долгой операции
-			select {
-			case <-time.After(5 * time.Second):
-				c.JSON(http.StatusOK, gin.H{"message": "Операция завершена"})
-			case <-c.Request.Context().Done():
-				// Если контекст отменен (например, по таймауту)
-				c.JSON(http.StatusRequestTimeout, gin.H{"error": "Операция прервана по таймауту"})
-			}
-		})
-		r.Run(":8080")
-	*/
 }

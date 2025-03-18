@@ -8,14 +8,16 @@ import (
 )
 
 type Config struct {
-	Host  string
-	DbURL string
+	Host      string
+	DbURL     string
+	JaegerUrl string
 }
 
 func GetConfig(logger *logg.Logger) *Config {
 	cfg := &Config{
-		Host:  os.Getenv("GO_HOST"),
-		DbURL: os.Getenv("GO_DB_URL"),
+		Host:      os.Getenv("GO_HOST"),
+		DbURL:     os.Getenv("GO_DB_URL"),
+		JaegerUrl: os.Getenv("JAEGER_ENDPOINT"),
 	}
 
 	logger.OuteputLog(logg.LogPayload{Info: "start parsing config"})
